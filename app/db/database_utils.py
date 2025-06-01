@@ -1,0 +1,48 @@
+# Contains functions to connect to our SQLite db and create the articles table
+
+import sqlite3
+import os
+from app.core.config import settings  # The settings instance that we created
+
+def get_db_connection():
+  
+  # Ensuring the dir before attempting to connect
+  db_dir = os.path.dirname(settings.SQLITE_DB)
+  if db_dir:  # Check if db_dir is not empty 
+    os.makedirs(db_dir, exist_ok=True)
+  conn = sqlite3.connect(settings.SQLITE_DB)
+  conn.row_factory = sqlite3.Row # Allows accessing columns by name (e.g., row['title'])
+  return conn
+
+
+def create_articles_table():
+  try:
+    with get_db_connection() as conn: # 'with' statement ensures connection is closed
+      cursor = conn.cursor()
+      cursor.execute("""
+          CREATE TABLE IF NOT EXISTS articles (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              url TEXT UNIQUE NOT NULL,
+              content TEXT,
+              retrieved_at TEXT NOT NULL
+          );
+      """)
+      conn.commit() # Commit the changes (table creation)
+      print("Table 'articles' checked/created successfully.")
+
+  except sqlite3.Error as e:
+    print(f"SQLite error when creating 'articles' table: {e}")
+  except Exception as e:
+    print(f"An unexpected error occurred during table creation: {e}")
+
+
+def init_db():
+  """
+  Initializes the database. Currently, this just means creating the tables.
+  """
+  # Use the updated setting name: settings.SQLITE_DB
+  print(f"Attempting to initialize database at: {settings.SQLITE_DB}")
+  create_articles_table()
+  print("Database initialization process complete.")
+

@@ -1,13 +1,32 @@
 # Starting up FASTAPI app instance
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
+# Setting up and connecting to db
+from app.db.database_utils import init_db
+
 # importing the pydantic models to be used
-from app.models.article import Article, ArticleCreate;
-from datetime import datetime;
+from app.models.article import Article, ArticleCreate
+from datetime import datetime
+
+
+# App startup defined 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+  print("FastAPI application startup: Initializing database via lifespan...")
+  init_db()
+  print("Database initialization complete via lifespan.")
+
+  yield
+
+  # Code to run on shutdown (if any)
+  print("FastAPI application shutdown.")
+
 
 
 # Creating FASTAPI app instance 
 app = FastAPI(
+  lifespan=lifespan,  # Passing the lifespan context manager 
   # Defining metadata for our api
   title="Scalable Search Engine API",
   description="API for searching and indexing data in db",

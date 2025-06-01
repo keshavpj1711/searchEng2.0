@@ -2,6 +2,7 @@
 fastapi
 uvicorn[standard]
 pydantic
+pydantic-settings
 
 # For Crawler
 beautifulsoup4
