@@ -1,0 +1,9 @@
+# For setting up server
+fastapi
+uvicorn[standard]
+pydantic
+
+# For Crawler
+beautifulsoup4
+requests
+aiohttp
