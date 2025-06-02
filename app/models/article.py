@@ -8,12 +8,12 @@ from datetime import datetime;
 class ArticleBase(BaseModel): 
   title: str
   url: HttpUrl # Pydantic will validate if this is a valid URL
-  content: Optional[str] = None
+  content: str
 
 class ArticleCreate(ArticleBase):
     # This model defines the data expected when creating a new article.
-    # In our case it's same as ArticleBase
-    pass
+    # optionally include retrieved_at if provided by the client
+    retrieved_at: Optional[datetime] = None
 
 class Article(ArticleBase):
     # This model will represent an article as returned by the API,

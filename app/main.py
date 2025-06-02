@@ -3,11 +3,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 # Setting up and connecting to db
-from app.db.database_utils import init_db
+from app.db.database_utils import init_db, get_db_connection
+
+# Sending and recieving from db and managin responses
+import sqlite3
+from fastapi import HTTPException
 
 # importing the pydantic models to be used
 from app.models.article import Article, ArticleCreate
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # App startup defined 
@@ -70,16 +74,72 @@ async def get_status():
 async def add_document(article_data: ArticleCreate):
   print(f"Received document to add: '{article_data.title}' at URL: {article_data.url}")
 
-  # For testing purpose i am adding some mock data here
-  mock_id = 1 # In reality, this would come from the database sequence
-  mock_retrieved_at = datetime.now()
+  final_retrieved_at: datetime
+  # Checking if the retrieved_at was provided by the client or not
+  if article_data.retrieved_at:
+    if article_data.retrieved_at.tzinfo is None:
+      # This case is less likely if your JSON always has TZ, but good for safety.
+      print(f"Warning: Received naive datetime for retrieved_at: {article_data.retrieved_at}. Assuming UTC.")
+      final_retrieved_at = article_data.retrieved_at.replace(tzinfo=timezone.utc)
+    else:
+      final_retrieved_at = article_data.retrieved_at
+    print(f"Using provided retrieved_at: {final_retrieved_at.isoformat()}")
+  else:
+    # If not provided, generate it now as UTC.
+    final_retrieved_at = datetime.now(timezone.utc)
+    print(f"Generated new retrieved_at (UTC): {final_retrieved_at.isoformat()}")
 
+  # Convert datetime object to ISO 8601 string for database storage
+  retrieved_at_iso_string = final_retrieved_at.isoformat()
+  
+  # Convert HttpUrl to string for database storage
+  url_string = str(article_data.url)
+
+  # Inserting article into db
+  try:
+    with get_db_connection() as conn:
+      cursor = conn.cursor()
+      sql = """
+        INSERT INTO articles (title, url, content, retrieved_at) 
+        VALUES (?, ?, ?, ?)
+      """
+      cursor.execute(sql, (
+        article_data.title, 
+        url_string, 
+        article_data.content, 
+        retrieved_at_iso_string 
+      ))
+      conn.commit()
+      actual_id_from_db = cursor.lastrowid # Get the ID of the newly inserted row
+      print(f"Article '{article_data.title}' inserted into DB with ID: {actual_id_from_db}")
+  
+  except sqlite3.IntegrityError as e:
+    # commonly occurs if the URL (which is UNIQUE) already exists
+    print(f"Database IntegrityError (e.g., URL already exists): {e}")
+    raise HTTPException(
+      status_code=409, # Conflict
+      detail=f"Article with this URL already exists or other integrity constraint failed: {str(article_data.url)}"
+    )
+  except sqlite3.Error as e:
+    print(f"Database error during article insertion: {e}")
+    raise HTTPException(
+      status_code=500, # Internal Server Error
+      detail="An error occurred while inserting the article into the database."
+    )
+  except Exception as e:
+    print(f"An unexpected error occurred during article insertion: {e}")
+    raise HTTPException(
+      status_code=500,
+      detail="An unexpected error occurred."
+    )
+
+  # Construct the response using the Article Pydantic model
   return Article(
-    id=mock_id,
+    id=actual_id_from_db,
     title=article_data.title,
-    url=article_data.url,
+    url=article_data.url, # Pydantic model will handle HttpUrl type
     content=article_data.content,
-    retrieved_at=mock_retrieved_at
+    retrieved_at=final_retrieved_at # Return the datetime object
   )
 
 @app.get(

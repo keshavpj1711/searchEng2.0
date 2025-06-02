@@ -2,6 +2,7 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
+  FETCHED_ARTICLES: str = "./data/fetched_sample_articles.json"
   SQLITE_DB: str = "./data/wikipedia_articles.db"
 
   class Config: 
