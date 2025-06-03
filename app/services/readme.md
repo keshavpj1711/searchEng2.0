@@ -41,4 +41,25 @@ Our TF-IDF scorer will involve several steps:
 
 - Calculating TF-IDF Scores: Multiplying TF by IDF for each word in each document.
 
+## When will we use TF-IDF?
+
+### During Indexing
+
+When a document is added to our system. We will: 
+1. preprocess it's text
+2. Calculate it's TF of each word in that doc
+3. Compute TF-IDF score for each word in that specific doc and update your stored list of TF-IDF scores
+
+Now this Computing of TF-IDF is the most important step and we will have to think more and more about it.
+
+### During Searching(Ranking)
+
+When user submit a search query to our "/search" endpoint, what will happen:
+1. Pre process the search query 
+2. For each term use the inverted index to find all the document that contain the term
+3. Retrieve the pre-calculated TF-IDF score of that query term for each of those documents.
+4. Combine these TF-IDF scores to calculate an overall relevance score for each document with respect to the query. The simplest way is to sum the TF-IDF scores of all query terms found in a document
+5. Rank the documents based on this relevance score and return the top results.
+
+> TF-IDF scores are calculated when documents are processed/indexed, and these pre-calculated scores are then used during a search to rank documents.
 

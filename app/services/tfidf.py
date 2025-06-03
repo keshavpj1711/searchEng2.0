@@ -74,7 +74,56 @@ def calculate_tf(tokens: List[str]) -> Dict[str, float]:
    
   return tf_scores
 
+
+# IDF = log(N/df_t); N being the total docs and df_t being the number of docs in which the term is present
+def calculate_idf(corpus_tokens: List[List[str]]) -> Dict[str, float]:
+  if not corpus_tokens:
+    return {}
+
+  total_docs = len(corpus_tokens)
+
+  # Now to find df_t
+  doc_frequencies: Dict[str, int] = Counter()
+  for doc_tokens in corpus_tokens:
+    # Getting the unique term in each doc
+    unique_terms_in_doc = set(doc_tokens)
+    # Traversing through terms and counting there occurence
+    for term in unique_terms_in_doc:
+      doc_frequencies[term] += 1
+    
+  idf_scores: Dict[str, float] = {}
+
+  for term, df in doc_frequencies.items():
+    if df > 0:
+      idf_scores[term] = math.log((total_docs/df))
+    else: 
+      idf_scores[term] = 0.0
+
+  return idf_scores
+
+
+def calculate_tfidf(tokens: List[str], idf_scores: Dict[str, float]) -> Dict[str, float]:
+  """
+  Calculates the TF-IDF score for each term in a document, given the document's tokens and the corpus IDF scores.
+  TF-IDF(term, document) = TF(term, document) * IDF(term)
+  
+  Args:
+    tokens: A list of preprocessed tokens from a single document.
+    idf_scores: A dictionary where keys are terms and values are their IDF scores (calculated from the entire corpus).
+    
+  Returns:
+    A dictionary where keys are terms and values are their TF-IDF scores for the given document.
+  """
+  tf_scores = calculate_tf(tokens) # Get TF scores for the document
+  
+  tfidf_scores: Dict[str, float] = {}
+  for term, tf in tf_scores.items():
+    # Get IDF score for term.  If term not in IDF (rare case), treat IDF as 0 (not important).
+    idf = idf_scores.get(term, 0.0) # 0 if term not in IDF
+    tfidf_scores[term] = tf * idf
+    
+  return tfidf_scores
+
+
 if __name__ == "__main__":
-  sample_text = "Hello this is a just a mark mark's text or test for this if working now text or test this being hello"
-  processed_tokens = preprocess_text(sample_text)
-  print(calculate_tf(processed_tokens))
+  pass
