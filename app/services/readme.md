@@ -38,6 +38,7 @@ Our TF-IDF scorer will involve several steps:
 - Calculating Term Frequency (TF): How often each word appears in a single document.
 
 - Calculating Inverse Document Frequency (IDF): How rare or common each word is across all documents in your database.
+  - This is one of the complex part, discussion for handling of this is [here](#idf-dictionary)
 
 - Calculating TF-IDF Scores: Multiplying TF by IDF for each word in each document.
 
@@ -63,17 +64,46 @@ When user submit a search query to our "/search" endpoint, what will happen:
 
 > TF-IDF scores are calculated when documents are processed/indexed, and these pre-calculated scores are then used during a search to rank documents.
 
-## What will be generated from TF-IDF scores
+## IDF Dictionary
 
-- **IDF Scores Dictionary:**
-Maps each term to its current IDF value.
+We are following a systematic approach for creating our IDF Dictionary. It's needed because we have to multiply it with tf in order to get the tf_idf score for a term, for a particular document.
+
+### Building of IDF
+
+Steps involved in creating our IDF Dict are: 
+
+-  fetches all the present articles
+  - puts all the data into a list 
+      ```python 
+      cursor = conn.cursor()
+      cursor.execute("SELECT title, content FROM articles WHERE content IS NOT NULL")
+      rows = cursor.fetchall()
+      for row in rows:
+        # Combine title and content into one document, giving title extra weight
+        combined_text = f"{row['title']} {row['title']} {row['content']}"
+        contents.append(combined_text)
+      ```
+  - We have **given title an increased weight** in order to improve the search
+
+- Using the `contents` list whose each element is a string that is comprised of title x 2 and the content
+  - preprocessing each and every element of `contents` giving us corpus_tokens
+- Total documents = length(contents)
+- Now the IDF is calculated using the number of docs in which a term occurs and total docs 
+  - The implemented logic is held in the `calculate_idf_with_freq()` which gives us idf_dict as well as the word_to_doc_freq
+
+
+## Important data we need to store in order to calculate the TF-IDF score for a particular term of a specific document
+
+- **IDF Scores Dictionary:**\
+> uses the document_freq in order to calculate idf_scores
+Maps each term to its current IDF value.\
 Example: { "python": 1.2, "database": 0.8, ... }
 
-- **Document Frequency Dictionary (df_t):**
-Maps each term to the number of documents it appears in.
+- **Document Frequency Dictionary (df_t):**\
+Maps each term to the number of documents it appears in.\
 Example: { "python": 300, "database": 150, ... }
 
-- **Total Document Count (N):**
+- **Total Document Count (N):**\
 The total number of documents in your corpus.
 
 > Inverted Index: Maps terms to the list of documents (and optionally TF-IDF scores) that contain them.
