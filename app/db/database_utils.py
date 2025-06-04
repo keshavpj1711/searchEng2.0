@@ -3,6 +3,7 @@
 import sqlite3
 import os
 from app.core.config import settings  # The settings instance that we created
+from typing import List, Dict, Any
 
 def get_db_connection():
   
@@ -46,3 +47,21 @@ def init_db():
   create_articles_table()
   print("Database initialization process complete.")
 
+
+def fetch_all_articles() -> List[Dict[str, Any]]:
+  """Fetch all articles with id, title, and content from database"""
+  articles = []
+  try:
+    with get_db_connection() as conn:
+      cursor = conn.cursor()
+      cursor.execute("SELECT id, title, content FROM articles WHERE content IS NOT NULL")
+      rows = cursor.fetchall()
+      for row in rows:
+        articles.append({
+          'id': row['id'],
+          'title': row['title'],
+          'content': row['content']
+        })
+  except Exception as e:
+    print(f"Error fetching articles: {e}")
+  return articles
