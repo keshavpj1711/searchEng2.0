@@ -76,9 +76,9 @@ def calculate_tf(tokens: List[str]) -> Dict[str, float]:
 
 
 # IDF = log(N/df_t); N being the total docs and df_t being the number of docs in which the term is present
-def calculate_idf(corpus_tokens: List[List[str]]) -> Dict[str, float]:
+def calculate_idf_with_freq(corpus_tokens: List[List[str]]) -> tuple[Dict[str, float], Dict[str, int]]:
   if not corpus_tokens:
-    return {}
+    return {}, {}
 
   total_docs = len(corpus_tokens)
 
@@ -99,7 +99,7 @@ def calculate_idf(corpus_tokens: List[List[str]]) -> Dict[str, float]:
     else: 
       idf_scores[term] = 0.0
 
-  return idf_scores
+  return idf_scores, dict(doc_frequencies)
 
 
 def calculate_tfidf(tokens: List[str], idf_scores: Dict[str, float]) -> Dict[str, float]:
