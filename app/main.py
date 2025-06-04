@@ -13,10 +13,12 @@ from app.db.database_utils import init_db, get_db_connection
 import sqlite3
 from fastapi import HTTPException
 
-# Building and TF-IDF scores 
+# Building and getting TF-IDF scores 
 from app.services.build_tfidf_data import build_tfidf_data, get_tfidf_data
 from app.services.tfidf import calculate_tfidf, preprocess_text
 
+# Building inv index 
+from app.services.build_inv_index import build_inverted_index
 
 # App startup defined 
 @asynccontextmanager
@@ -25,10 +27,18 @@ async def lifespan(app: FastAPI):
   init_db()
   print("Database initialization complete via lifespan.")
 
+  # The order matters here since first we need to build our tfidf_data
+  # Then only we can build the inverted index according to it
+
   # Build TF-IDF data structures
   print("Building TF-IDF data structures...")
   build_tfidf_data()
   print("TF-IDF data structures ready.")
+
+  # Build inverted index
+  print("Building inverted index...")
+  build_inverted_index()
+  print("Inverted index ready.")
 
   yield
 
