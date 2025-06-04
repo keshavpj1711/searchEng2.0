@@ -50,7 +50,7 @@ When a document is added to our system. We will:
 2. Calculate it's TF of each word in that doc
 3. Compute TF-IDF score for each word in that specific doc and update your stored list of TF-IDF scores
 
-Now this Computing of TF-IDF is the most important step and we will have to think more and more about it.
+Now this Computing of TF-IDF is the most important step and we will have to think more about it.
 
 ### During Searching(Ranking)
 
@@ -63,3 +63,41 @@ When user submit a search query to our "/search" endpoint, what will happen:
 
 > TF-IDF scores are calculated when documents are processed/indexed, and these pre-calculated scores are then used during a search to rank documents.
 
+## What will be generated from TF-IDF scores
+
+- **IDF Scores Dictionary:**
+Maps each term to its current IDF value.
+Example: { "python": 1.2, "database": 0.8, ... }
+
+- **Document Frequency Dictionary (df_t):**
+Maps each term to the number of documents it appears in.
+Example: { "python": 300, "database": 150, ... }
+
+- **Total Document Count (N):**
+The total number of documents in your corpus.
+
+> Inverted Index: Maps terms to the list of documents (and optionally TF-IDF scores) that contain them.
+> Not from TF-IDF scores
+
+
+## Compute TF-IDF score for each word in that specific doc and update your stored list of TF-IDF scores
+
+This is one of the major problems to tackle. At this point since the dataset is small what we are doing is just for testing and development purposes.
+
+### First Approach
+
+> This is the first approach i am going to follow and over time this might not be the approach i am using so please see accordingly
+
+rebuilding the data like: 
+- IDF Score Dictonary
+- Document Freq: Maps each term to the number of docs it appears in
+- Total document count
+every time server restart
+
+What this approach follows is that the **idf scores for the newly added document is calculated based on the previous data available**.\
+This does decrease our quality of search but it is simpler to implement.
+
+### At some point in future approach
+
+- **Incremental Updates**: That is only when the documents are added or removed we make changes to these above mentioned data
+- **Background Processing**: Using Celery to rebuilding this data asynchronously
