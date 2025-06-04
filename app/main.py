@@ -2,16 +2,20 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# Setting up and connecting to db
-from app.db.database_utils import init_db, get_db_connection
-
-# Sending and recieving from db and managin responses
-import sqlite3
-from fastapi import HTTPException
-
 # importing the pydantic models to be used
 from app.models.article import Article, ArticleCreate
 from datetime import datetime, timezone
+
+# Setting up and connecting to db
+from app.db.database_utils import init_db, get_db_connection
+
+# Sending and recieving from db and managing responses
+import sqlite3
+from fastapi import HTTPException
+
+# Building and TF-IDF scores 
+from app.services.build_tfidf_data import build_tfidf_data, get_tfidf_data
+from app.services.tfidf import calculate_tfidf, preprocess_text
 
 
 # App startup defined 
@@ -20,6 +24,11 @@ async def lifespan(app: FastAPI):
   print("FastAPI application startup: Initializing database via lifespan...")
   init_db()
   print("Database initialization complete via lifespan.")
+
+  # Build TF-IDF data structures
+  print("Building TF-IDF data structures...")
+  build_tfidf_data()
+  print("TF-IDF data structures ready.")
 
   yield
 
@@ -76,6 +85,7 @@ async def add_document(article_data: ArticleCreate):
 
   final_retrieved_at: datetime
   # Checking if the retrieved_at was provided by the client or not
+  # This is just to remove variations in timezone so that all the retrieved_at are in UTC 
   if article_data.retrieved_at:
     if article_data.retrieved_at.tzinfo is None:
       # This case is less likely if your JSON always has TZ, but good for safety.
@@ -94,6 +104,18 @@ async def add_document(article_data: ArticleCreate):
   
   # Convert HttpUrl to string for database storage
   url_string = str(article_data.url)
+
+  # Calculate TF-IDF scores for this document
+  tfidf_data = get_tfidf_data()
+  if tfidf_data['idf_scores']:
+    # Combine title and content, giving title extra weight
+    combined_text = f"{article_data.title} {article_data.title} {article_data.content}"
+    tokens = preprocess_text(combined_text)
+    tfidf_scores = calculate_tfidf(tokens, tfidf_data['idf_scores'])
+    print(f"Calculated TF-IDF scores for {len(tfidf_scores)} terms")
+  else:
+    print("No IDF data available yet")
+    tfidf_scores = {}
 
   # Inserting article into db
   try:
