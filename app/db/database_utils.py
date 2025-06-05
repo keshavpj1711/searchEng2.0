@@ -65,3 +65,27 @@ def fetch_all_articles() -> List[Dict[str, Any]]:
   except Exception as e:
     print(f"Error fetching articles: {e}")
   return articles
+
+
+def fetch_documents_by_ids(doc_ids: List[int]) -> List[Dict[str, Any]]:
+  """Fetch specific documents by their IDs"""
+  if not doc_ids:
+    return []
+  
+  placeholders = ','.join(['?' for _ in doc_ids])
+  articles = []
+  try:
+    with get_db_connection() as conn:
+      cursor = conn.cursor()
+      cursor.execute(f"SELECT id, title, url, content FROM articles WHERE id IN ({placeholders})", doc_ids)
+      rows = cursor.fetchall()
+      for row in rows:
+        articles.append({
+          'id': row['id'],
+          'title': row['title'],
+          'url': row['url'],
+          'content': row['content'][:200] + '...' if len(row['content']) > 200 else row['content']
+        })
+  except Exception as e:
+    print(f"Error fetching documents by IDs: {e}")
+  return articles
