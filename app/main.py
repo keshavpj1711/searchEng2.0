@@ -20,6 +20,10 @@ from app.services.tfidf import calculate_tfidf, preprocess_text
 # Building inv index 
 from app.services.build_inv_index import build_inverted_index
 
+# Performing Search
+from app.services.search_logic import perform_search
+
+
 # App startup defined 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -179,20 +183,19 @@ async def add_document(article_data: ArticleCreate):
   summary="Search for documents",
   tags=["Search"],
 )
-async def search_documents(query: str):
-  print(f"Recieved search query: '{query}'")
+async def search_documents(query: str, limit: int = 10):
+  """Search for documents using TF-IDF scoring and inverted index"""
+  print(f"Received search query: '{query}'")
 
   # Later on we will process this query 
   # Use the TF-IDF scores to search for matching documents
   # Rank the results
   # Return the list of documents
 
-  mock_results = [
-    {"id": 101, "title": "Mock Result 1 for " + query, "relevance_score": 0.95, "url": "http://example.com/result1"},
-    {"id": 102, "title": "Another Mock Result for " + query, "relevance_score": 0.87, "url": "http://example.com/result2"}
-  ]
+  # All these above tasks are now being done by our search_logic.py
+  
+  # Call your search logic
+  search_result = perform_search(query, limit)
+  
+  return search_result
 
-  return {
-    "query recieved": query,
-    "search results": mock_results,
-  }
