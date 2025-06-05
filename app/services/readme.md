@@ -5,7 +5,7 @@ Services present are:
 - TF-IDF Scorer
 - Search Logic
 
-## TF-IDF Score
+# TF-IDF Score
 
 - It's a numerical statistics used to measure the importance of a word in a document relative to a corpus(collection of data).
 
@@ -131,3 +131,79 @@ This does decrease our quality of search but it is simpler to implement.
 
 - **Incremental Updates**: That is only when the documents are added or removed we make changes to these above mentioned data
 - **Background Processing**: Using Celery to rebuilding this data asynchronously
+
+
+# Building Inv Index 
+
+Here's the format of the inverted index we are trying to build: \
+`term -> [(doc_id, tf_idf_score), (doc_id, tf_idf_score), (doc_id, tf_idf_score), ...]`
+
+## What we need?
+
+To build it we need somethings before hand: 
+- The articles from the db
+- the idf_dict for terms
+
+## The process
+
+- We fetch the generated/stored idf_scores for terms and all the articles from our db to process
+
+- For each article:
+  - Get it's doc_id
+  - **Get combined text**: title + title + content
+    - the title is added two times to give weights to the title 
+  - **Preprocess the combined text** to get tokens so that we can parse through each term 
+  - From these tokens we calculate their tf_idf_score using our function.
+  - **For each term** in the tf_idf_scores_dict **we check if it's present in the inv index** or not
+    - if NOT, we create a entry for that term as `term: [(doc_id, tf_idf_score)]` in the inv index
+    - if YES, we add the `(doc_id, tf_idf_score)` to the list for that term
+
+> Now at the end we sort tf_idf scores as highest first for each term 
+```python 
+for term in inverted_index:
+    inverted_index[term].sort(key=lambda x: x[1], reverse=True)
+```
+
+
+# Search Logic
+
+Implementing the search logic is pretty simple once we have our inverted index. When implementing our `/search` we are going to call this with the parameter being the search terms.
+
+## What we need 
+
+- Our inverted index 
+- fetching documents by id
+
+## The process
+
+In the process first we are going to process the search terms and then going to fetch the articles wrt to the document score.
+
+### Creating document_scores_dict 
+
+Searching docs to fetch and getting their document scores
+
+- For each token in the search string we fetch the respective documents
+
+- Then we make a document_scores_dict by combining the tf_idf scores for search_query terms. 
+  - For example we have search_query as **"indexes text"**
+  - Now **"indexes"** is present in doc_id 1, 23, 21 and 40.
+  - And **"text"** is present in doc_id 21, 30, 40 and 60.
+  - Formulating the document_scores_dict:
+    ```python
+    {
+      1: tf_idf_score for "indexes",
+      21: tf_idf_score for "indexes" + "text", 
+      23: tf_idf_score for "indexes",
+      30: tf_idf_score for "text", 
+      40: tf_idf_score for "indexes" + "text",
+      60: tf_idf_score for "text",
+    }
+    ```
+
+### Fetching document details
+
+After we have our `document_scores_dict` we can fetch the details of the document with doc_ids present in the dict.
+
+This is done in order to return this to the user with article title, content and other details.
+
+Now before fetching we first sort the `document_scores_dict` to have the documents with highest scores to be fetched first.
