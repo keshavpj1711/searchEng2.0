@@ -52,3 +52,8 @@ def build_inverted_index():
 
   
   print(f"Inverted index built with {len(inverted_index)} terms")
+
+
+def get_inverted_index():
+  """Return the current inverted index"""
+  return inverted_index
