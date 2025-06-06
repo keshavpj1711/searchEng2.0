@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple
 from app.db.database_utils import fetch_all_articles 
 from app.services.tfidf import preprocess_text, calculate_tfidf
 from app.services.build_tfidf_data import get_tfidf_data
+from app.services.redis_client import save_inv_index_to_redis, load_inv_index_from_redis
 
 # Global inverted index
 # Later on we will keep in this in some sort of file or mem to be easily accessible 
@@ -16,7 +17,20 @@ def build_inverted_index():
   global inverted_index
   
   print("Building inverted index...")
-  
+
+  # Trying to load from Redis
+  print("Trying to fetch Inverted Index data from Redis...")
+  cached_inv_index = load_inv_index_from_redis()
+
+  if cached_inv_index: 
+    # using the found data in redis
+    inverted_index = cached_inv_index
+    print("Using cached Inverted Index data from Redis")
+    return 
+
+  # No data found - build from scratch 
+  print("No cached data found. Building Inverted Index from scratch...")
+
   # Get pre-calculated IDF scores
   tfidf_data = get_tfidf_data()
   if not tfidf_data['idf_scores']:
@@ -52,6 +66,10 @@ def build_inverted_index():
 
   
   print(f"Inverted index built with {len(inverted_index)} terms")
+
+  # Saving the built inverted index into redis
+  print("Saving the Inverted Index to Redis")
+  save_inv_index_to_redis(inverted_index)
 
 
 def get_inverted_index():

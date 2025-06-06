@@ -1,5 +1,5 @@
 import redis
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, List
 
 from redis import client
 from app.core.config import settings
@@ -81,6 +81,7 @@ def load_tfidf_data_from_redis() -> Tuple[int, Dict[str, int], Dict[str, float]]
       return 0, {}, {}
     
     # Loading each component
+    # Below error can be ignored since we know they are not none and are of correct datatype
     total_docs = int(client.get("tfidf:total_documents"))
     doc_frequencies = pickle.loads(client.get("tfidf:document_frequencies"))
     idf_scores = pickle.loads(client.get("tfidf:idf_scores"))
@@ -91,3 +92,47 @@ def load_tfidf_data_from_redis() -> Tuple[int, Dict[str, int], Dict[str, float]]
   except Exception as e:
     print(f"Error loading TF-IDF data from Redis: {e}")
     return 0, {}, {}
+
+
+# TODO: saving and loading the inverted index from redis 
+def save_inv_index_to_redis(inv_index: Dict[str, List[Tuple[int, float]]]) -> bool:
+  '''
+    Saves inverted index data to redis to prevent rebuilding it everytime
+  '''
+  # trying to connect to client
+  try:
+    client = get_redis_client()
+    if client is None:
+      print("Redis Client is not available")
+      return False
+
+    # if the connection suceeds we will save the data to redis
+    client.set("inv_index", pickle.dumps(inv_index))
+
+    print(f"Saved Inverted Index data to Redis: {len(inv_index)} terms")
+    return True
+  
+  except Exception as e:
+    print(f"Error saving Inverted Index data to Redis: {e}")
+    return False
+
+
+def load_inv_index_from_redis() -> Dict[str, List[Tuple[int, float]]]:
+  '''
+    Loads the inverted index data present in Redis instead of building it from scratch
+  '''
+  try:
+    client = get_redis_client()
+    if client is None: 
+      print("Redis Client is not available")
+      return {}
+
+    # loading data from redis and returning it
+    inv_index = pickle.loads(client.get("inv_index"))
+
+    print(f"Loaded Inverted Index data from Redis: {len(inv_index)} terms")
+    return inv_index
+
+  except Exception as e: 
+    print(f"Error Loading Inverted Index data from Redis: {e}")
+    return {}
