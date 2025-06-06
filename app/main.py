@@ -131,6 +131,10 @@ async def add_document(article_data: ArticleCreate):
     print("No IDF data available yet")
     tfidf_scores = {}
 
+  # TODO: Day 5 - Use Celery to update TF-IDF data and inverted index asynchronously
+  # Currently new documents won't appear in search until server restart
+
+
   # Inserting article into db
   try:
     with get_db_connection() as conn:
