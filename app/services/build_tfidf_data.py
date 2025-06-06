@@ -1,7 +1,7 @@
 from typing import Dict, List
-from app.db.database_utils import get_db_connection
-from app.services.tfidf import preprocess_text, calculate_idf_with_freq
 from app.db.database_utils import fetch_all_articles
+from app.services.tfidf import preprocess_text, calculate_idf_with_freq
+from app.services.redis_client import save_tfidf_data_to_redis, load_tfidf_data_from_redis
 
 # Setting as global vars later we can store it using Redis
 total_document_count: int = 0
@@ -12,7 +12,20 @@ def build_tfidf_data():
   """Build all TF-IDF related data structures"""
   global total_document_count, document_frequencies, idf_scores
   
-  print("Fetching articles from database...")
+  # Try to load from Redis first
+  print("Checking Redis for cached TF-IDF data...")
+  cached_total, cached_doc_freq, cached_idf = load_tfidf_data_from_redis()
+  
+  if cached_total > 0 and cached_doc_freq and cached_idf:
+    # Data found in Redis - using it!
+    total_document_count = cached_total
+    document_frequencies = cached_doc_freq
+    idf_scores = cached_idf
+    print("Using cached TF-IDF data from Redis")
+    return
+  
+  # No cached data found - build from scratch
+  print("No cached data found. Building TF-IDF data from database...")
   all_articles = fetch_all_articles() 
   
   if not all_articles:
@@ -35,6 +48,11 @@ def build_tfidf_data():
   print(f"Built TF-IDF data:")
   print(f"  - Total documents: {total_document_count}")
   print(f"  - Unique terms: {len(idf_scores)}")
+
+  # Save to Redis for next time
+  print("Saving TF-IDF data to Redis...")
+  save_tfidf_data_to_redis(total_document_count, document_frequencies, idf_scores)
+
 
 def get_tfidf_data():
   """Return the current TF-IDF data structures"""
