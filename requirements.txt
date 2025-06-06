@@ -8,3 +8,6 @@ pydantic-settings
 beautifulsoup4
 requests
 aiohttp
+
+# For setting up redis
+redis
