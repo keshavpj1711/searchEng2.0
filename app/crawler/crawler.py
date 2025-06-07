@@ -2,9 +2,10 @@ import requests
 import json
 import asyncio
 import aiohttp
+from aiohttp import ClientTimeout, ClientError
 from bs4 import BeautifulSoup
 import os
-from datetime import datetime, timezone # For retrieved_at timestamp
+from datetime import datetime, timezone
 
 # --- Configuration ---
 URL_WIKI = "https://en.wikipedia.org"
@@ -14,92 +15,157 @@ HEADERS = {
 }
 
 # Path Setup
-# We want output files in search_engine_project/data/
 try:
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-except NameError: # __file__ is not defined if running in certain interactive environments
-    PROJECT_ROOT = os.path.abspath(".") # Fallback to current working directory
+except NameError:
+    PROJECT_ROOT = os.path.abspath(".")
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-# Ensure the main data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
 
 FEATURED_ARTICLES_LIST_PATH = os.path.join(DATA_DIR, "featured_articles_list.json")
 FETCHED_SAMPLE_ARTICLES_PATH = os.path.join(DATA_DIR, "fetched_sample_articles.json")
 
+# --- Improved Helper Functions with Retry Logic ---
+async def scrap_article_content(session, url, title, max_retries=3):
+    """Fetches and extracts content for a single Wikipedia article with retry logic."""
+    print(f"Fetching content for: {title}")
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            # Set timeout for this specific request
+            timeout = ClientTimeout(
+                total=30,      # Total timeout: 30 seconds
+                connect=10,    # Connection timeout: 10 seconds
+                sock_read=20   # Socket read timeout: 20 seconds
+            )
+            
+            async with session.get(url, headers=HEADERS, timeout=timeout) as response:
+                response.raise_for_status()
+                html_content = await response.text()
+                soup = BeautifulSoup(html_content, "html.parser")
+                
+                content_div = soup.find("div", id="mw-content-text")
+                article_text = ""
+                if content_div:
+                    paragraphs = content_div.find_all("p")
+                    for p in paragraphs:
+                        article_text += p.get_text(separator=" ", strip=True) + "\n\n"
+                
+                if not article_text.strip():
+                    print(f"Warning: No paragraph text extracted for {title}")
 
-# --- Helper Functions ---
-async def scrap_article_content(session, url, title):
-    """Fetches and extracts content for a single Wikipedia article."""
-    print(f"Fetching content for: {title} from {url}")
-    try:
-        async with session.get(url, headers=HEADERS) as response: # Pass headers here too
-            response.raise_for_status() # Raises HTTPError for bad responses (4XX or 5XX)
-            html_content = await response.text()
-            soup = BeautifulSoup(html_content, "html.parser")
+                retrieved_at_utc = datetime.now(timezone.utc).isoformat()
+                
+                print(f"Successfully fetched: {title}")
+                return {
+                    "title": title,
+                    "url": url,
+                    "content": article_text.strip() if article_text else None,
+                    "retrieved_at": retrieved_at_utc
+                }
+                
+        except (ClientError, asyncio.TimeoutError) as e:
+            print(f"Attempt {attempt}/{max_retries} failed for {title}: {type(e).__name__}")
+            if attempt == max_retries:
+                print(f"All {max_retries} attempts failed for {title}")
+                return {
+                    "title": title, 
+                    "url": url, 
+                    "content": None, 
+                    "retrieved_at": None, 
+                    "error": f"Failed after {max_retries} attempts: {str(e)}"
+                }
             
-            content_div = soup.find("div", id="mw-content-text")
-            article_text = ""
-            if content_div:
-                paragraphs = content_div.find_all("p")
-                for p in paragraphs:
-                    article_text += p.get_text(separator=" ", strip=True) + "\n\n"
+            # Exponential backoff: wait longer between retries
+            wait_time = 2 ** attempt  # 2, 4, 8 seconds
+            print(f"⏳ Waiting {wait_time} seconds before retry...")
+            await asyncio.sleep(wait_time)
             
-            if not article_text.strip():
-                print(f"Warning: No paragraph text extracted for {title}")
-                # Return with empty content but mark as successful fetch for structure
-                # Or, treat as an error if content is mandatory
-                # For now, let's include it but a user might want to filter these out later.
-
-            retrieved_at_utc = datetime.now(timezone.utc).isoformat()
-            
+        except Exception as e:
+            print(f"Unexpected error scraping {title}: {e}")
             return {
-                "title": title,
-                "url": url,
-                "content": article_text.strip() if article_text else None, # Store None if truly empty
-                "retrieved_at": retrieved_at_utc
+                "title": title, 
+                "url": url, 
+                "content": None, 
+                "retrieved_at": None, 
+                "error": str(e)
             }
-    except aiohttp.ClientError as e:
-        print(f"AIOHTTP ClientError scraping {title} at {url}: {e}")
-        return {"title": title, "url": url, "content": None, "retrieved_at": None, "error": str(e)}
-    except Exception as e:
-        print(f"Generic error scraping {title} at {url}: {e}")
-        return {"title": title, "url": url, "content": None, "retrieved_at": None, "error": str(e)}
 
 async def fetch_content_for_articles_async(articles_to_fetch_list):
-    """Asynchronously fetches content for a list of articles."""
+    """Asynchronously fetches content with improved concurrency control and error handling."""
     fetched_data = []
-    # Create one session for all requests for better performance
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for article_info in articles_to_fetch_list:
-            tasks.append(
-                scrap_article_content(session, article_info["link"], article_info["title"])
-            )
+    
+    # Reduce concurrency to avoid overwhelming Wikipedia
+    semaphore = asyncio.Semaphore(5)  # Only 5 concurrent requests
+    
+    # Set session-level timeout and connection limits
+    timeout = ClientTimeout(total=60)  # Overall session timeout
+    connector = aiohttp.TCPConnector(
+        limit=20,           # Total connection pool size
+        limit_per_host=5,   # Max connections per Wikipedia
+        ttl_dns_cache=300,  # DNS cache TTL (5 minutes)
+        use_dns_cache=True,
+        enable_cleanup_closed=True
+    )
+    
+    async with aiohttp.ClientSession(
+        timeout=timeout, 
+        connector=connector,
+        headers=HEADERS
+    ) as session:
         
-        # Use return_exceptions=True to handle individual task failures without stopping all
-        results = await asyncio.gather(*tasks, return_exceptions=True) 
+        async def sem_fetch(article_info):
+            """Fetch with semaphore control"""
+            async with semaphore:
+                return await scrap_article_content(
+                    session, 
+                    article_info["link"], 
+                    article_info["title"]
+                )
         
-        for i, result in enumerate(results):
-            original_article_info = articles_to_fetch_list[i]
-            if isinstance(result, Exception):
-                print(f"Task for '{original_article_info['title']}' failed with exception: {result}")
-                # Optionally add error info to a results list
-            elif result and result.get("content") is not None: # Check for non-empty content specifically
-                fetched_data.append(result)
-            elif result: # Result was returned, but content might be None or an error flag set
-                print(f"No content fetched or error for: {result.get('title', original_article_info['title'])} - Error: {result.get('error', 'Content was None')}")
+        # Process in smaller batches to avoid overwhelming the server
+        batch_size = 100
+        total_batches = (len(articles_to_fetch_list) + batch_size - 1) // batch_size
+        
+        for i in range(0, len(articles_to_fetch_list), batch_size):
+            batch = articles_to_fetch_list[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            
+            print(f"Processing batch {batch_num}/{total_batches}: {len(batch)} articles")
+            
+            tasks = [sem_fetch(article_info) for article_info in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            successful = 0
+            failed = 0
+            for result in results:
+                if isinstance(result, Exception):
+                    print(f"Task failed with exception: {result}")
+                    failed += 1
+                elif result and result.get("content") is not None:
+                    fetched_data.append(result)
+                    successful += 1
+                elif result:
+                    print(f"No content for: {result.get('title', 'Unknown')} - {result.get('error', 'Content was None')}")
+                    failed += 1
+            
+            print(f"Batch {batch_num} complete: {successful} successful, {failed} failed")
+            
+            # Add delay between batches to be respectful to Wikipedia
+            if i + batch_size < len(articles_to_fetch_list):
+                print("⏳ Waiting 3 seconds before next batch...")
+                await asyncio.sleep(3)
+    
+    print(f"\nFetching complete! Successfully retrieved {len(fetched_data)} articles")
     return fetched_data
 
-# --- Main Crawler Logic ---
-def run_crawler_operations():
-    """Orchestrates the crawling process."""
-    print("--- Wikipedia Featured Article Crawler ---")
-
-    # 1. Get the full list of featured articles (title & link)
-    all_featured_articles = []
+# --- Sync helper functions for setup script (unchanged) ---
+def get_featured_articles_list_sync():
+    """Sync function to get featured articles list"""
     print("\nStep 1: Get list of all featured articles.")
-    print(f"1. Update list from Wikipedia (fetches {URL_FEAT_ARTICLES})")
+    print(f"1. Fetch list of articles from Wikipedia (fetches {URL_FEAT_ARTICLES})")
     print(f"2. Use existing local list (from {FEATURED_ARTICLES_LIST_PATH})")
     
     choice = input("Choose option (1 or 2): ")
@@ -124,37 +190,30 @@ def run_crawler_operations():
             
             with open(FEATURED_ARTICLES_LIST_PATH, "w", encoding="utf-8") as f:
                 json.dump(current_articles_list, f, indent=4, ensure_ascii=False)
-            all_featured_articles = current_articles_list
-            print(f"Found {len(all_featured_articles)} featured articles. List saved to '{FEATURED_ARTICLES_LIST_PATH}'.")
+            print(f"Found {len(current_articles_list)} featured articles. List saved to '{FEATURED_ARTICLES_LIST_PATH}'.")
+            return current_articles_list
         except requests.RequestException as e:
             print(f"Error fetching from Wikipedia: {e}. Attempting to use local list if available.")
-            if os.path.exists(FEATURED_ARTICLES_LIST_PATH):
-                 choice = '2' # Fallback to using local list
-            else:
-                print("No local list available. Exiting.")
-                return
+            choice = '2'  # Fallback to using local list
         except Exception as e:
             print(f"An unexpected error occurred during Wikipedia list fetch: {e}. Exiting.")
-            return
+            return []
 
-
-    if choice == '2': # Handles explicit choice '2' or fallback from failed '1'
+    if choice == '2':
         try:
             with open(FEATURED_ARTICLES_LIST_PATH, "r", encoding="utf-8") as f:
                 all_featured_articles = json.load(f)
             print(f"Loaded {len(all_featured_articles)} articles from '{FEATURED_ARTICLES_LIST_PATH}'.")
+            return all_featured_articles
         except FileNotFoundError:
             print(f"Local list '{FEATURED_ARTICLES_LIST_PATH}' not found. Please run option 1 first. Exiting.")
-            return
+            return []
         except json.JSONDecodeError:
             print(f"Error decoding JSON from '{FEATURED_ARTICLES_LIST_PATH}'. File may be corrupt. Exiting.")
-            return
+            return []
 
-    if not all_featured_articles:
-        print("No featured articles to process. Exiting.")
-        return
-
-    # 2. Ask user how many samples they want and perform systematic sampling
+def sample_articles_sync(all_featured_articles):
+    """Sync function to handle user input and sampling"""
     print(f"\nStep 2: Select articles for content fetching (sampling).")
     total_available = len(all_featured_articles)
     while True:
@@ -180,26 +239,19 @@ def run_crawler_operations():
                 sampled_articles_to_fetch.append(all_featured_articles[i])
             else:
                 break
-        # If interval math resulted in fewer than desired, try to fill up
-        # This is a simple way, more complex might pick random remaining if needed
+        
         idx = 0
         while len(sampled_articles_to_fetch) < num_samples_desired and idx < total_available:
             if all_featured_articles[idx] not in sampled_articles_to_fetch:
                  sampled_articles_to_fetch.append(all_featured_articles[idx])
-            idx +=1
+            idx += 1
 
         print(f"Selected {len(sampled_articles_to_fetch)} articles for content fetching using systematic sampling.")
 
-    if not sampled_articles_to_fetch:
-        print("No articles selected for sampling. Exiting.")
-        return
+    return sampled_articles_to_fetch
 
-    # 3. Fetch content for the sampled articles
-    print(f"\nStep 3: Fetching content for {len(sampled_articles_to_fetch)} selected articles...")
-    # This part uses asyncio
-    articles_with_content = asyncio.run(fetch_content_for_articles_async(sampled_articles_to_fetch))
-
-    # 4. Save the fetched sample articles (with content)
+def save_articles_to_json_sync(articles_with_content):
+    """Sync function to save articles to JSON"""
     print(f"\nStep 4: Saving fetched article content.")
     if articles_with_content:
         with open(FETCHED_SAMPLE_ARTICLES_PATH, "w", encoding="utf-8") as f:
@@ -208,13 +260,57 @@ def run_crawler_operations():
         print("Each article includes: title, url, content, retrieved_at.")
     else:
         print(f"No content was successfully fetched for any of the selected sample articles. '{FETCHED_SAMPLE_ARTICLES_PATH}' not created or updated.")
+
+# --- Main Crawler Logic ---
+async def run_crawler_operations_async():
+    """Async version for use in FastAPI lifespan"""
+    print("--- Wikipedia Featured Article Crawler ---")
+
+    # Steps 1-2: Get featured articles and sample (sync operations)
+    all_featured_articles = get_featured_articles_list_sync()
+    if not all_featured_articles:
+        print("No featured articles to process. Exiting.")
+        return
+
+    sampled_articles_to_fetch = sample_articles_sync(all_featured_articles)
+    if not sampled_articles_to_fetch:
+        print("No articles selected for sampling. Exiting.")
+        return
+
+    # Step 3: Fetch content (async operation with improved error handling)
+    print(f"\nStep 3: Fetching content for {len(sampled_articles_to_fetch)} selected articles...")
+    print("Using improved timeout handling and retry logic...")
+    articles_with_content = await fetch_content_for_articles_async(sampled_articles_to_fetch)
+
+    # Step 4: Save to JSON (sync operation)
+    save_articles_to_json_sync(articles_with_content)
+    
+    print("\n--- Crawler operations complete ---")
+
+def run_crawler_operations():
+    """Original sync version for standalone script execution"""
+    print("--- Wikipedia Featured Article Crawler ---")
+
+    # Steps 1-2: Get featured articles and sample
+    all_featured_articles = get_featured_articles_list_sync()
+    if not all_featured_articles:
+        print("No featured articles to process. Exiting.")
+        return
+
+    sampled_articles_to_fetch = sample_articles_sync(all_featured_articles)
+    if not sampled_articles_to_fetch:
+        print("No articles selected for sampling. Exiting.")
+        return
+
+    # Step 3: Fetch content (this uses asyncio.run for standalone execution)
+    print(f"\nStep 3: Fetching content for {len(sampled_articles_to_fetch)} selected articles...")
+    articles_with_content = asyncio.run(fetch_content_for_articles_async(sampled_articles_to_fetch))
+
+    # Step 4: Save to JSON
+    save_articles_to_json_sync(articles_with_content)
     
     print("\n--- Crawler operations complete ---")
 
 # --- Entry Point ---
 if __name__ == "__main__":
-    # To run this script:
-    # 1. Make sure you are in the `search_engine_project` root directory.
-    # 2. Run: `python -m app.crawler.crawler`
-    # Ensure app/crawler/ has an __init__.py file (can be empty).
     run_crawler_operations()
