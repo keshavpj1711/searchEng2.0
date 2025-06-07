@@ -123,13 +123,17 @@ cython_debug/
 .vscode/
 
 # SQLite files
-# .db
+.db
 *.sqlite
 *.sqlite3
 *.db-journal # SQLite rollback journal
 *.db-shm    # SQLite shared-memory file
 *.db-wal    # SQLite write-ahead log file
 
+# setup initialization file
+.search_engine_initialized
+
 # Data files
-# data/*.db Not ignoring them currently
+data/*.db
+data/
 data/*.sqlite3
