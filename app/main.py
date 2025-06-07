@@ -14,14 +14,17 @@ import sqlite3
 from fastapi import HTTPException
 
 # Building and getting TF-IDF scores 
-from app.services.build_tfidf_data import build_tfidf_data, get_tfidf_data
+from app.services.build_tfidf_data import get_prebuilt_tfidf_data, get_tfidf_data
 from app.services.tfidf import calculate_tfidf, preprocess_text
 
 # Building inv index 
-from app.services.build_inv_index import build_inverted_index
+from app.services.build_inv_index import get_prebuilt_inv_index
 
 # Performing Search
 from app.services.search_logic import perform_search
+
+# adding celery tasks to update search index or inverted index in background when a new document is added
+from app.tasks.indexing_tasks import update_search_index
 
 
 # App startup defined 
@@ -36,12 +39,14 @@ async def lifespan(app: FastAPI):
 
   # Build TF-IDF data structures
   print("Building TF-IDF data structures...")
-  build_tfidf_data()
+  get_prebuilt_tfidf_data()
+
   print("TF-IDF data structures ready.")
 
   # Build inverted index
   print("Building inverted index...")
-  build_inverted_index()
+  get_prebuilt_inv_index()
+
   print("Inverted index ready.")
 
   yield
@@ -119,22 +124,6 @@ async def add_document(article_data: ArticleCreate):
   # Convert HttpUrl to string for database storage
   url_string = str(article_data.url)
 
-  # Calculate TF-IDF scores for this document
-  tfidf_data = get_tfidf_data()
-  if tfidf_data['idf_scores']:
-    # Combine title and content, giving title extra weight
-    combined_text = f"{article_data.title} {article_data.title} {article_data.content}"
-    tokens = preprocess_text(combined_text)
-    tfidf_scores = calculate_tfidf(tokens, tfidf_data['idf_scores'])
-    print(f"Calculated TF-IDF scores for {len(tfidf_scores)} terms")
-  else:
-    print("No IDF data available yet")
-    tfidf_scores = {}
-
-  # TODO: Day 5 - Use Celery to update TF-IDF data and inverted index asynchronously
-  # Currently new documents won't appear in search until server restart
-
-
   # Inserting article into db
   try:
     with get_db_connection() as conn:
@@ -152,7 +141,13 @@ async def add_document(article_data: ArticleCreate):
       conn.commit()
       actual_id_from_db = cursor.lastrowid # Get the ID of the newly inserted row
       print(f"Article '{article_data.title}' inserted into DB with ID: {actual_id_from_db}")
-  
+
+      # Celery task to handle rebuilding the inv_index
+      # Trigger background re-indexing (async)
+      print("Triggering background index update via Celery...")
+      update_search_index.delay()
+      print("Background task queued successfully.")
+      
   except sqlite3.IntegrityError as e:
     # commonly occurs if the URL (which is UNIQUE) already exists
     print(f"Database IntegrityError (e.g., URL already exists): {e}")
