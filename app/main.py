@@ -26,6 +26,10 @@ from app.services.search_logic import perform_search
 # adding celery tasks to update search index or inverted index in background when a new document is added
 from app.tasks.indexing_tasks import update_search_index
 
+# for checking cache staleness
+from app.db.database_utils import fetch_all_articles
+from app.services.redis_client import get_redis_client
+
 
 # App startup defined 
 @asynccontextmanager
@@ -33,6 +37,14 @@ async def lifespan(app: FastAPI):
   print("FastAPI application startup: Initializing database via lifespan...")
   init_db()
   print("Database initialization complete via lifespan.")
+
+  # Checking for cache stalness
+  should_refresh = await check_cache_freshness()
+  print(should_refresh)
+  if should_refresh:
+    print("Cache appears stale - refreshing synchronously...")
+    update_search_index() # Using it as a normal fn 
+    print("Cache refresh completed.")
 
   # The order matters here since first we need to build our tfidf_data
   # Then only we can build the inverted index according to it
@@ -54,6 +66,31 @@ async def lifespan(app: FastAPI):
   # Code to run on shutdown (if any)
   print("FastAPI application shutdown.")
 
+
+async def check_cache_freshness() -> bool:
+  """Check if cache needs refresh based on document count mismatch"""
+  try:    
+    # Get actual document count from database
+    db_articles = fetch_all_articles()
+    db_count = len(db_articles)
+    
+    # Get cached document count
+    client = get_redis_client()
+    if client is None:
+      return True  # No Redis, need to refresh
+    
+    cached_count_raw = client.get("tfidf:total_documents")
+    cached_count = int(cached_count_raw) if cached_count_raw else 0
+    
+    # If counts don't match, cache is stale
+    if db_count != cached_count:
+      print(f"Cache mismatch: DB has {db_count} docs, cache has {cached_count}")
+      return True
+    
+    return False
+  except Exception as e:
+    print(f"Error checking cache freshness: {e}")
+    return True  # On error refresh just to be safe
 
 
 # Creating FASTAPI app instance 
