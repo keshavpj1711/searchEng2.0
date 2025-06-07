@@ -12,11 +12,9 @@ from app.services.redis_client import save_inv_index_to_redis, load_inv_index_fr
 # rather than recreating it on every server restart
 inverted_index: Dict[str, List[Tuple[int, float]]] = {}
 
-def build_inverted_index():
-  """Build the inverted index using existing TF-IDF data"""
+
+def get_prebuilt_inv_index():
   global inverted_index
-  
-  print("Building inverted index...")
 
   # Trying to load from Redis
   print("Trying to fetch Inverted Index data from Redis...")
@@ -30,6 +28,14 @@ def build_inverted_index():
 
   # No data found - build from scratch 
   print("No cached data found. Building Inverted Index from scratch...")
+  build_inverted_index()
+
+
+def build_inverted_index():
+  """Build the inverted index using existing TF-IDF data"""
+  global inverted_index
+  
+  print("Building inverted index...")
 
   # Get pre-calculated IDF scores
   tfidf_data = get_tfidf_data()
@@ -74,4 +80,6 @@ def build_inverted_index():
 
 def get_inverted_index():
   """Return the current inverted index"""
+  # Using the redis cache after celery worker is done updating the redis cache with new data
+  get_prebuilt_inv_index()
   return inverted_index

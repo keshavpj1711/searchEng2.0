@@ -8,11 +8,11 @@ total_document_count: int = 0
 document_frequencies: Dict[str, int] = {}  # df_t: how many docs contain each term
 idf_scores: Dict[str, float] = {}  # current IDF scores
 
-def build_tfidf_data():
-  """Build all TF-IDF related data structures"""
+
+def get_prebuilt_tfidf_data():
   global total_document_count, document_frequencies, idf_scores
   
-  # Try to load from Redis first
+  # Trying to load from Redis 
   print("Checking Redis for cached TF-IDF data...")
   cached_total, cached_doc_freq, cached_idf = load_tfidf_data_from_redis()
   
@@ -26,6 +26,14 @@ def build_tfidf_data():
   
   # No cached data found - build from scratch
   print("No cached data found. Building TF-IDF data from database...")
+
+  build_tfidf_data()
+
+
+def build_tfidf_data():
+  """Build all TF-IDF related data structures"""
+  global total_document_count, document_frequencies, idf_scores
+  
   all_articles = fetch_all_articles() 
   
   if not all_articles:
@@ -56,6 +64,8 @@ def build_tfidf_data():
 
 def get_tfidf_data():
   """Return the current TF-IDF data structures"""
+  # update the data if the redis cache is updated by the celery worker 
+  get_prebuilt_tfidf_data()
   return {
     'total_documents': total_document_count,
     'document_frequencies': document_frequencies,
