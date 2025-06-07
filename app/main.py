@@ -30,10 +30,22 @@ from app.tasks.indexing_tasks import update_search_index
 from app.db.database_utils import fetch_all_articles
 from app.services.redis_client import get_redis_client
 
+# for setting up for new user
+from app.setup import is_first_time, starting_setup
+
 
 # App startup defined 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+  # Setting up for first time
+  print("Output", is_first_time())
+
+  if is_first_time():
+    print("New Setup detected - fetching articles and setting up db")
+    await starting_setup()
+  else:
+    print("Starting...")
+
   print("FastAPI application startup: Initializing database via lifespan...")
   init_db()
   print("Database initialization complete via lifespan.")
