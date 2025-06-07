@@ -152,3 +152,40 @@ docker-compose down
 docker-compose up
 ```
 
+
+# Celery
+
+- Celery is a distributed task queue that helps you run tasks outside your main FastAPI application. 
+- Think of it as a separate worker that handles time-consuming jobs in the background.
+
+## Why Celery❓
+
+Let's try to understand it with the help of an analogy:
+
+**Imagine a restraunt:** 
+
+- FAST API app -> Waiter (takes order and serves the customers)
+- Celery worker -> Kitchen Chef (does the actual cooking in the bg)
+- Redis -> Order Board (where orders are written for chef to see)
+
+**With out celery**
+
+```text 
+Customer orders food → Waiter goes to kitchen and cooks → Customer waits 30 minutes → Other customers get angry
+```
+
+**With celery**
+
+```text 
+Customer orders food → Waiter writes order on board → Returns immediately to serve other customers
+Meanwhile: Chef sees order on board → Cooks food → Food ready
+```
+
+## Where will we use Celery❓
+
+When a new document is added the tfidf_data and the inv_index has to be rebuild again. This takes time and makes our app unable to handle other requests while this is done.
+
+So as soon as a new document is added the celery worker is assigned to start rebuilding the required data but this is done in the backend and does not effect the actual working of our FAST API app which is still available to cater to user's requests.
+
+> A Question that comes to my mind is: How does large scale systems handles these requests like these doesn't these lead to so many background tasks queuing with a large userbase?
+

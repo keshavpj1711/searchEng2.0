@@ -1,26 +1,36 @@
 services:
-  # Your FastAPI search engine
   web:
     build: .
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data  # Mount data directory for SQLite database
+      - ./data:/app/data
     depends_on:
       - redis
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=redis      # Internal container name
+      - REDIS_PORT=6379       # Internal container port
       - REDIS_DB=0
 
-  # Redis service for caching TF-IDF data and inverted index
   redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - "6380:6379"          # External 6380, Internal 6379
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+
+  celery_worker:
+    build: .
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis      # Same internal name
+      - REDIS_PORT=6379       # Same internal port
+      - REDIS_DB=0
+    command: celery -A app.celery_app worker --loglevel=info
 
 volumes:
   redis_data:

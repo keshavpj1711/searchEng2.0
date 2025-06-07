@@ -11,3 +11,6 @@ aiohttp
 
 # For setting up redis
 redis
+
+# Setting up celery
+celery
