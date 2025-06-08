@@ -68,6 +68,7 @@ flowchart TB
 ![Celery](https://img.shields.io/badge/celery-%23a9cc54.svg?style=for-the-badge&logo=celery&logoColor=ddf4a4)
 ![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Swagger](https://img.shields.io/badge/-Swagger-%23Clojure?style=for-the-badge&logo=swagger&logoColor=white)
 
 - **Backend**: FastAPI, Python 3.10+
 - **Database**: SQLite (production-ready for 100K+ documents)
@@ -87,7 +88,7 @@ Get SearchEngine2.0 running in under 2 minutes:
 # Clone the repository
 
 git clone https://github.com/keshavpj1711/searchEng2.0.git
-cd SearchEngine2.0
+cd searchEng2.0
 
 # Start the entire stack
 
@@ -116,7 +117,7 @@ curl http://localhost:8000/status
 
 # Search for articles
 
-curl "http://localhost:8000/search?query=machine learning\&limit=5"
+curl "http://localhost:8000/search?query=football\&limit=5"
 
 # View interactive docs provided via Swagger UI
 
@@ -234,12 +235,12 @@ curl -X POST "http://localhost:8000/documents" \
 Search documents with TF-IDF ranking
 
 ```bash
-curl "http://localhost:8000/search?query=machine learning\&limit=10"
+curl "http://localhost:8000/search?query=football\&limit=10"
 ```
 
 ```json
 {
-  "query": "machine learning",
+  "query": "football",
   "total_results": 42,
   "results": [
     {
@@ -312,8 +313,8 @@ if database_doc_count != cached_doc_count:
 ### Clone repository
 
 ```bash
-git clone https://github.com/yourusername/SearchEngine2.0.git
-cd SearchEngine2.0
+git clone https://github.com/keshavpj1711/searchEng2.0.git
+cd searchEng2.0
 ```
 
 > Since, before doing any form of testing or development you will have to clone this repo first
@@ -505,5 +506,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ in 7 days | Showcasing scalable backend architecture**
-
-*SearchEngine2.0 demonstrates production-ready skills in distributed systems, async programming, caching strategies, and containerization - perfect for senior backend engineering roles.*
