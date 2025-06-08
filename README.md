@@ -8,7 +8,7 @@
 
 > **A production-ready search engine that can processes 20,000+ documents with 1M+ terms, delivering sub-100ms search responses through intelligent caching and async processing.**
 
-Built in less than 7 days as a demonstration of scalable backend architecture, featuring TF-IDF ranking, real-time indexing, and containerized deployment.
+Built in less than 7 days as a follow up to my [previous search engine](https://github.com/keshavpj1711/Search-Engine), this was built keeping in mind how to scale systems and provide backend as a service, this version of my search engine, features TF-IDF ranking, real-time indexing, and containerized deployment.
 
 ---
 
