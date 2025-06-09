@@ -137,3 +137,6 @@ cython_debug/
 data/*.db
 data/
 data/*.sqlite3
+
+# Testing files
+test.py

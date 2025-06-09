@@ -1,6 +1,7 @@
 # Starting up FASTAPI app instance
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 
 # importing the pydantic models to be used
 from app.models.article import Article, ArticleCreate
@@ -33,6 +34,9 @@ from app.services.redis_client import get_redis_client
 # for setting up for new user
 from app.setup import is_first_time, starting_setup
 
+# Importing Router
+from app.routers import users
+from app.models.user import User
 
 # App startup defined 
 @asynccontextmanager
@@ -114,6 +118,15 @@ app = FastAPI(
   version="0.1.0"  # To keep track of updates
 )
 
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Defining endpoints
 
@@ -132,7 +145,7 @@ async def greet_user():
   summary="Get API Status",
   tags=["General"]
 )
-async def get_status():
+async def get_status(current_user: User = Depends(users.get_current_active_user)):
   # Return status of the api 
   return {
     "status": "API is up and running",
@@ -148,7 +161,7 @@ async def get_status():
   summary="Add a new document", 
   tags=["Documents"]
 )
-async def add_document(article_data: ArticleCreate):
+async def add_document(article_data: ArticleCreate, current_user: User = Depends(users.get_current_active_user)):
   print(f"Received document to add: '{article_data.title}' at URL: {article_data.url}")
 
   final_retrieved_at: datetime
@@ -231,7 +244,7 @@ async def add_document(article_data: ArticleCreate):
   summary="Search for documents",
   tags=["Search"],
 )
-async def search_documents(query: str, limit: int = 10):
+async def search_documents(query: str, limit: int = 10, current_user: User = Depends(users.get_current_active_user)):
   """Search for documents using TF-IDF scoring and inverted index"""
   print(f"Received search query: '{query}'")
 
@@ -247,3 +260,6 @@ async def search_documents(query: str, limit: int = 10):
   
   return search_result
 
+
+
+app.include_router(users.router)
